@@ -1,21 +1,34 @@
 #!/usr/bin/env node
 import { program } from 'commander';
-import yaml from 'js-yaml';
 import fs from 'fs';
-import { Project } from 'ts-morph';
-const { exec } = require('child_process');
+import { exec } from 'child_process';
 
-// MARK requires that an ios simulator is running
-const process = exec('expo start -i');
+const START_IDENTIFIER = 'REACT_NAVIGATION_GENERATION_OUTPUT:';
 
-process.stdout.on('data', (data: any) => {
-  console.log(data.toString());
-});
+program.option('-o, --outputpath <path>', 'output path');
 
-process.stderr.on('data', (data: any) => {
-  console.log('stderr: ' + data.toString());
-});
+program.parse(process.argv);
 
-process.on('exit', (code: any) => {
-  console.log('child process exited with code ' + code.toString());
-});
+if (program.outputpath) {
+  // MARK requires that an ios simulator is running
+  const expoProcess = exec('expo start -i');
+
+  if (expoProcess && expoProcess.stdout) {
+    expoProcess.stdout.on('data', (data: any) => {
+      const output = data.toString();
+      if (output.includes(START_IDENTIFIER)) {
+        const routeMapJson = output.substring(
+          output.indexOf(START_IDENTIFIER) + START_IDENTIFIER.length,
+          output.lastIndexOf('}') + 1,
+        );
+        const outputPath = process.cwd() + program.outputpath;
+        const tsString = `const routes = ${routeMapJson};export default routes;`;
+        fs.writeFileSync(outputPath, tsString);
+        expoProcess.kill();
+        console.log('Route map created at ' + program.outputpath);
+      }
+    });
+  }
+} else {
+  console.log('No output path');
+}
