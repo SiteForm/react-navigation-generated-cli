@@ -11,8 +11,12 @@
   "bin": {
     "rn-gen": "./lib/index.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "react-navigation",
+    "generated",
+    "routes"
+  ],
+  "author": "siddhatiwari",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^14.0.11",

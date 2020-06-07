@@ -44,9 +44,7 @@ const writeRouteParamTypes = (appRouteFilePath: string, routeMapJson: any) => {
     fileData.indexOf(END_ROUTE_TYPES_IDENTIFIER) +
     END_ROUTE_TYPES_IDENTIFIER.length;
 
-  const postIdentifierText = fileData.slice(
-    typesEndIdentifierEndIndex + END_ROUTE_TYPES_IDENTIFIER.length,
-  );
+  const postIdentifierText = fileData.slice(typesEndIdentifierEndIndex);
 
   const keyToImports: Array<[string, string]> = matchAll(
     fileData,
