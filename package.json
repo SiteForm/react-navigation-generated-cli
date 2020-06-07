@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node ./lib/index.js",
     "create": "npm run build && npm run test",
-    "build": "rm -rf lib && tsc -p .",
-    "test": "sudo npm i -g && rn-gen"
+    "build": "rm -rf lib && tsc -p ."
   },
   "bin": {
     "rn-gen": "./lib/index.js"
