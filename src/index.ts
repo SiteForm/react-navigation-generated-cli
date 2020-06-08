@@ -134,8 +134,9 @@ try {
 
       expoProcess.stdout?.on('data', (data: any) => {
         const output = data.toString();
+        const outputHasIdentifier = output.includes(START_IDENTIFIER);
 
-        if (program.showLogs) {
+        if (program.showLogs && !outputHasIdentifier) {
           console.log(output);
         }
 
@@ -146,10 +147,7 @@ try {
           }
         }
 
-        if (
-          output.includes(START_IDENTIFIER) &&
-          (!finished || program.keepOpen)
-        ) {
+        if (outputHasIdentifier && (!finished || program.keepOpen)) {
           finished = true;
           if (!program.keepOpen) {
             expoProcess.kill();
