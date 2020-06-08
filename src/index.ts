@@ -34,7 +34,25 @@ export { useNavigation };`;
 program.option('-t, --timeout <timeout>', 'logs timeout seconds');
 program.parse(process.argv);
 
-const writeRouteParamTypes = (appRouteFilePath: string, routeMapJson: any) => {
+type RouteMap = {
+  // routeName: string
+  [name: string]: RouteMap | string;
+};
+
+const getRouteMapRouteNames = (routeMap: RouteMap, routeNames: Set<string>) => {
+  for (const [key, child] of Object.entries(routeMap ?? {})) {
+    if (key === 'routeName' && typeof child === 'string') {
+      routeNames.add(child);
+    } else if (typeof child !== 'string') {
+      getRouteMapRouteNames(child, routeNames);
+    }
+  }
+};
+
+const writeRouteParamTypes = (
+  appRouteFilePath: string,
+  rootNavigators: any,
+) => {
   const fileData = fs.readFileSync(appRouteFilePath, 'utf8');
 
   const typesStartIdentifierEndIndex =
@@ -52,15 +70,25 @@ const writeRouteParamTypes = (appRouteFilePath: string, routeMapJson: any) => {
   )
     .toArray()
     .map((s: string) => [s.split('_').join('.'), s]);
+  const routeNamesWithParams = new Set(keyToImports.map((o) => o[0]));
+
+  const allRouteNames = new Set<string>();
+  getRouteMapRouteNames(rootNavigators, allRouteNames);
+
   const typesObjString = keyToImports.reduce(
     (str, [key, val], i) =>
       str + (i === 0 ? '\n' : '') + `  '${key}': ${val}Params;\n`,
     '',
   );
+  const noParamsString = [...allRouteNames]
+    .filter((k) => !routeNamesWithParams.has(k))
+    .reduce((str, routeName) => str + `  '${routeName}': {};\n`, '');
 
   const editedFileData =
     fileData.slice(0, typesStartIdentifierEndIndex) +
-    `export type NavigationParams = {${typesObjString}};` +
+    `export type NavigationParams = {${
+      typesObjString + '\n' + noParamsString
+    }};` +
     '\n' +
     USE_NAVGATION_HOOK +
     '\n' +
