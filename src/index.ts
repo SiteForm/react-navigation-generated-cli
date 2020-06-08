@@ -32,6 +32,8 @@ const USE_NAVGATION_HOOK = `const useNavigation = () => {
 export { useNavigation };`;
 
 program.option('-t, --timeout <timeout>', 'logs timeout seconds');
+program.option('-l, --showLogs', 'display logs');
+program.option('-k, --keepOpen', 'keep expo process running');
 program.parse(process.argv);
 
 type RouteMap = {
@@ -113,6 +115,7 @@ try {
     if (expoProcess) {
       let firstLog = false;
       let finished = false;
+      let prevRouteMap: string;
 
       const spinner = new Spinner(
         '%s Waiting for react-navigation-generated logs...',
@@ -120,30 +123,47 @@ try {
       spinner.setSpinnerString('|/-\\');
 
       const waitTimeout = setTimeout(() => {
-        expoProcess.kill();
-        spinner.stop();
-        console.log(
-          '\nLogs timeout exceeded. No react-navigation-generated app logs found.',
-        );
+        if (!program.keepOpen) {
+          expoProcess.kill();
+          spinner.stop();
+          console.log(
+            '\nLogs timeout exceeded. No react-navigation-generated app logs found.',
+          );
+        }
       }, (program.timeout ?? DEFAULT_APP_LOGS_TIMEOUT_SECONDS) * 1000);
 
       expoProcess.stdout?.on('data', (data: any) => {
         const output = data.toString();
 
-        if (!firstLog) {
-          firstLog = true;
-          spinner.start();
+        if (program.showLogs) {
+          console.log(output);
         }
 
-        if (output.includes(START_IDENTIFIER) && !finished) {
+        if (!firstLog) {
+          firstLog = true;
+          if (!program.keepOpen) {
+            spinner.start();
+          }
+        }
+
+        if (
+          output.includes(START_IDENTIFIER) &&
+          (!finished || program.keepOpen)
+        ) {
           finished = true;
-          expoProcess.kill();
+          if (!program.keepOpen) {
+            expoProcess.kill();
+          }
           spinner.stop();
           clearTimeout(waitTimeout);
           const routeMapJsonString = output.substring(
             output.indexOf(START_IDENTIFIER) + START_IDENTIFIER.length,
             output.lastIndexOf('}') + 1,
           );
+
+          if (routeMapJsonString === prevRouteMap) return;
+          prevRouteMap = routeMapJsonString;
+
           const outputPath = process.cwd() + outputpath;
           const tsString = `const routeMap = ${routeMapJsonString} as const;export default routeMap;`;
           fs.writeFileSync(outputPath, tsString);
