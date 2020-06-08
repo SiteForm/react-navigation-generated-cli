@@ -145,7 +145,7 @@ try {
             output.lastIndexOf('}') + 1,
           );
           const outputPath = process.cwd() + outputpath;
-          const tsString = `const routes = ${routeMapJsonString} as const;export default routes;`;
+          const tsString = `const routeMap = ${routeMapJsonString} as const;export default routeMap;`;
           fs.writeFileSync(outputPath, tsString);
           writeRouteParamTypes(
             process.cwd() + navigationroot,
