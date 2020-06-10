@@ -15,11 +15,19 @@ const DEFAULT_APP_LOGS_TIMEOUT_SECONDS = 60;
 const TYPE_IMPORT_MATCHER = /import.*{.*[A-Za-z] as (.*)Params.*}.*(?="|').*(?="|')/g;
 
 // MARK requires import { useNavigation as _useNavigation } from '@react-navigation/native';
-const USE_NAVGATION_HOOK = `const useNavigation = () => {
+const USE_NAVGATION_HOOK = `
+type NavigateToRouteParams<T extends keyof NavigationParams> = NavigationParams[T] | ExtraScreenParams<T>
+
+type ExtraScreenParams<T extends keyof NavigationParams> = {
+  screen: T,
+  params: NavigateToRouteParams<keyof NavigationParams>
+} & NavigationParams[T]
+
+const useNavigation = () => {
   const navigation = _useNavigation();
   const navigateTo: <T extends keyof NavigationParams>(
     route: { routeName: T },
-    routeParams: NavigationParams[T],
+    routeParams: NavigateToRouteParams<T>,
   ) => void = (route, routeParams) => {
     navigation.navigate(route.routeName, routeParams);
   };
@@ -29,7 +37,10 @@ const USE_NAVGATION_HOOK = `const useNavigation = () => {
   };
 };
 
-export { useNavigation };`;
+function useRoute<R extends keyof NavigationParams>(): RouteProp<NavigationParams, R> { return (_useRoute as any)()}
+
+export { useNavigation, useRoute };
+`;
 
 program.option('-t, --timeout <timeout>', 'logs timeout seconds');
 program.option('-l, --showLogs', 'display logs');
@@ -84,7 +95,7 @@ const writeRouteParamTypes = (
   );
   const noParamsString = [...allRouteNames]
     .filter((k) => !routeNamesWithParams.has(k))
-    .reduce((str, routeName) => str + `  '${routeName}': {};\n`, '');
+    .reduce((str, routeName) => str + `  '${routeName}': undefined;\n`, '');
 
   const editedFileData =
     fileData.slice(0, typesStartIdentifierEndIndex) +
@@ -117,15 +128,9 @@ try {
       let finished = false;
       let prevRouteMap: string;
 
-      const spinner = new Spinner(
-        '%s Waiting for react-navigation-generated logs...',
-      );
-      spinner.setSpinnerString('|/-\\');
-
       const waitTimeout = setTimeout(() => {
         if (!program.keepOpen) {
           expoProcess.kill();
-          spinner.stop();
           console.log(
             '\nLogs timeout exceeded. No react-navigation-generated app logs found.',
           );
@@ -133,17 +138,17 @@ try {
       }, (program.timeout ?? DEFAULT_APP_LOGS_TIMEOUT_SECONDS) * 1000);
 
       expoProcess.stdout?.on('data', (data: any) => {
-        const output = data.toString();
+        const output: string = data.toString();
         const outputHasIdentifier = output.includes(START_IDENTIFIER);
 
-        if (program.showLogs && !outputHasIdentifier) {
-          console.log(output);
+        if (program.showLogs && !outputHasIdentifier && output.length < 1000) {
+          console.log(output.trim());
         }
 
         if (!firstLog) {
           firstLog = true;
           if (!program.keepOpen) {
-            spinner.start();
+            console.log('Waiting for react-navigation-generated logs...');
           }
         }
 
@@ -152,7 +157,6 @@ try {
           if (!program.keepOpen) {
             expoProcess.kill();
           }
-          spinner.stop();
           clearTimeout(waitTimeout);
           const routeMapJsonString = output.substring(
             output.indexOf(START_IDENTIFIER) + START_IDENTIFIER.length,
