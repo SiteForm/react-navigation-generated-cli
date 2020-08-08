@@ -8,6 +8,7 @@ import jsyaml from 'js-yaml';
 import matchAll from 'match-all';
 
 const START_IDENTIFIER = 'REACT_NAVIGATION_GENERATED_OUTPUT:';
+const START_IDENTIFIER_2 = 'REACT_NAVIGATION_GENERATED_OUTPUT_2:';
 const START_ROUTE_TYPES_IDENTIFIER =
   '// START react-navigation-generated types\n';
 const END_ROUTE_TYPES_IDENTIFIER = '// END react-navigation-generated types\n';
@@ -25,15 +26,130 @@ type ExtraScreenParams<T extends keyof NavigationParams> = {
 
 const useNavigation = () => {
   const navigation = _useNavigation();
+
   const navigateTo: <T extends keyof NavigationParams>(
     route: { routeName: T },
     routeParams: NavigateToRouteParams<T>,
   ) => void = (route, routeParams) => {
     navigation.navigate(route.routeName, routeParams);
   };
+
+  const checkDown = (map: any, toFragment: string, level: number): {
+    routeName: string,
+    level: number
+  } | null => {
+    if (typeof map !== 'object') {
+      return null;
+    }
+  
+    if (map[toFragment]) {
+      return {
+        routeName: map[toFragment].routeName, 
+        level
+      };
+    }
+  
+    let childrenRes: any = null;
+    for (const child of Object.values(map)) {
+      const childRes = checkDown(child, toFragment, level + 1);
+      if (childRes) {
+        if (!childrenRes) {
+          childrenRes = childRes;
+        } else if (childrenRes.level > childRes) {
+          childrenRes = childRes;
+        }
+      }
+    }
+  
+    return childrenRes;
+  }
+  
+  const checkUp = (pathFragments: Array<string>, toFragment: string, level: number, skipKey: string): any => {
+    if (pathFragments.length === 0) {
+      return null;
+    }
+  
+    let currentLevelObj: any = routeMap;
+    for (const name of pathFragments) {
+      currentLevelObj = currentLevelObj[name];
+    }
+  
+    if (currentLevelObj[toFragment]) {
+      return {
+        routeName: currentLevelObj[toFragment].routeName,
+        level,
+      }
+    }
+  
+    let downRes: any = null;
+    for (const [name, child] of Object.entries(currentLevelObj)) {
+      if (name !== skipKey) {
+        let childRes = checkDown(child, toFragment, level + 1);
+        if (childRes) {
+          if (!downRes) {
+            downRes = childRes;
+          } else if (downRes.level > childRes) {
+            downRes = childRes;
+          }
+        }
+      }
+    }
+  
+    const upRes = checkUp(pathFragments.slice(0, pathFragments.length - 1), toFragment, level + 1, pathFragments[pathFragments.length]);
+  
+    if (upRes) {
+      if (downRes.level < upRes.level) {
+        return downRes;
+      }
+      return upRes;
+    }
+    return downRes;
+  }
+
+  function navigateRelative<T extends keyof RouteFragmentParams>
+  (from: string, toFragment: T, params: RouteFragmentParams[T]) {
+    const routeFragments = from.split('.');
+    const currentLevelRouteFragments = routeFragments.slice(0, routeFragments.length - 1);
+  
+    // //check level
+    let currentLevelObj: any = routeMap;
+    for (const name of currentLevelRouteFragments) {
+      currentLevelObj = currentLevelObj[name];
+    }
+
+    //checkdown
+    const currentObj = currentLevelObj[routeFragments[routeFragments.length - 1]];
+    const downRes = checkDown(currentObj, toFragment, 0);
+  
+    //checkup
+    const upRes = checkUp(currentLevelRouteFragments, toFragment, 0, routeFragments[routeFragments.length - 1]);
+  
+    if (downRes === null && upRes === null) {
+      throw new Error('Invalid Fragment');
+    }
+  
+    let routeName;
+    if (downRes) {
+      if (upRes) {
+        if (downRes.level < upRes.level) {
+          routeName = downRes.routeName;
+        } else {
+          routeName = upRes.routeName;
+        }
+      } else {
+        routeName = downRes.routeName;
+      }
+    } else {
+      routeName = upRes.routeName;
+    }
+
+    navigation.navigate(routeName, params);
+  }
+
   return {
     ...navigation,
-    navigateTo
+    navigateTo,
+    navigateRelative,
   };
 };
 
@@ -77,12 +193,26 @@ const writeRouteParamTypes = (
 
   const postIdentifierText = fileData.slice(typesEndIdentifierEndIndex);
 
+  const fragmentRouteNames = new Set<string>();
+  const fragmentRoute: any = {};
+  const fragmentParams: any = {};
+  const routeToImport: any = {};
+
   const keyToImports: Array<[string, string]> = matchAll(
     fileData,
     TYPE_IMPORT_MATCHER,
   )
     .toArray()
-    .map((s: string) => [s.split('_').join('.'), s]);
+    .map((s: string) => {
+      const sfrag = s.split('_');
+
+      const fragName = sfrag[sfrag.length - 1];
+      fragmentRouteNames.add(fragName);
+      fragmentRoute[fragName] = sfrag.join('.');
+      fragmentParams[fragName] = s;
+
+      return [sfrag.join('.'), s];
+    });
   const routeNamesWithParams = new Set(keyToImports.map((o) => o[0]));
 
   const allRouteNames = new Set<string>();
@@ -95,13 +225,37 @@ const writeRouteParamTypes = (
   );
   const noParamsString = [...allRouteNames]
     .filter((k) => !routeNamesWithParams.has(k))
-    .reduce((str, routeName) => str + `  '${routeName}': undefined;\n`, '');
+    .reduce((str, routeName) => str + `  '${routeName}': {};\n`, '');
+
+  const paramsString = [...fragmentRouteNames].reduce(
+    (str, key, i) => str + (i === 0 ? '\n' : '') + `  ${key} = '${key}', \n`,
+    '',
+  );
+
+  const fragString = [...fragmentRouteNames]
+    .filter((k) => !routeNamesWithParams.has(k))
+    .reduce(
+      (str, routeName) =>
+        str +
+        `  '${routeName}': ${`${fragmentParams[routeName]}Params` ?? '{}'};\n`,
+      '',
+    );
+  // const routeFragmentEnumString = [...allRouteNames]
+  //   .filter(k => fragmentRouteNames())
 
   const editedFileData =
     fileData.slice(0, typesStartIdentifierEndIndex) +
     `export type NavigationParams = {${
       typesObjString + '\n' + noParamsString
     }};` +
+    '\n' +
+    `export enum RouteFragments {
+      ${paramsString}
+    };` +
+    '\n' +
+    `export type RouteFragmentParams = {
+      ${fragString}
+    }` +
     '\n' +
     USE_NAVGATION_HOOK +
     '\n' +
@@ -137,13 +291,20 @@ try {
         }
       }, (program.timeout ?? DEFAULT_APP_LOGS_TIMEOUT_SECONDS) * 1000);
 
+      let iden1String: string | null;
+
       expoProcess.stdout?.on('data', (data: any) => {
         const output: string = data.toString();
         const outputHasIdentifier = output.includes(START_IDENTIFIER);
+        const outputHasIdentifier2 = output.includes(START_IDENTIFIER_2);
 
         if (program.showLogs && !outputHasIdentifier && output.length < 1000) {
           console.log(output.trim());
         }
+
+        // if (outputHasIdentifier || outputHasIdentifier2) {
+        //   console.log(output);
+        // }
 
         if (!firstLog) {
           firstLog = true;
@@ -152,28 +313,45 @@ try {
           }
         }
 
-        if (outputHasIdentifier && (!finished || program.keepOpen)) {
+        if (outputHasIdentifier) {
+          iden1String = output.match(
+            /REACT_NAVIGATION_GENERATED_OUTPUT:(.*)/,
+          )![1];
+        }
+
+        if (
+          outputHasIdentifier2 &&
+          iden1String &&
+          (!finished || program.keepOpen)
+        ) {
           finished = true;
           if (!program.keepOpen) {
             expoProcess.kill();
           }
           clearTimeout(waitTimeout);
-          const routeMapJsonString = output.substring(
-            output.indexOf(START_IDENTIFIER) + START_IDENTIFIER.length,
-            output.lastIndexOf('}') + 1,
-          );
+          const iden2String = output.match(
+            /REACT_NAVIGATION_GENERATED_OUTPUT_2:(.*)/,
+          )![1];
+
+          const routeMapJsonString = iden1String + iden2String;
 
           if (routeMapJsonString === prevRouteMap) return;
           prevRouteMap = routeMapJsonString;
 
-          const outputPath = process.cwd() + outputpath;
-          const tsString = `const routeMap = ${routeMapJsonString} as const;export default routeMap;`;
-          fs.writeFileSync(outputPath, tsString);
-          writeRouteParamTypes(
-            process.cwd() + navigationroot,
-            JSON.parse(routeMapJsonString),
-          );
-          console.log('\nRoute map created at ' + outputpath);
+          try {
+            const outputPath = process.cwd() + outputpath;
+            const tsString = `const routeMap = ${routeMapJsonString} as const;export default routeMap;`;
+            fs.writeFileSync(outputPath, tsString);
+            writeRouteParamTypes(
+              process.cwd() + navigationroot,
+              JSON.parse(routeMapJsonString),
+            );
+            console.log('\nRoute map created at ' + outputpath);
+          } catch (e) {
+            console.log('PARSE ERROR');
+          }
+
+          iden1String = null;
         }
       });
     }
