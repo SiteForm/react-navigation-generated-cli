@@ -278,81 +278,87 @@ try {
   if (navigationroot && outputpath) {
     // MARK requires that an ios simulator is running
     console.log('Starting expo...');
-    let expoProcess = exec('expo start -i');
 
-    expoProcess.on('exit', () => {
-      console.log('Restarting expo...');
-      expoProcess = exec('expo start -i');
-    });
+    let routeMapString = '';
+    let firstLog = false;
+    let finished = false;
+    let prevRouteMap: string;
 
-    if (expoProcess) {
-      let firstLog = false;
-      let finished = false;
-      let prevRouteMap: string;
+    const waitTimeout = setTimeout(() => {
+      if (!program.keepOpen) {
+        expoProcess.kill();
+        console.log(
+          '\nLogs timeout exceeded. No react-navigation-generated app logs found.',
+        );
+      }
+    }, (program.timeout ?? DEFAULT_APP_LOGS_TIMEOUT_SECONDS) * 1000);
 
-      const waitTimeout = setTimeout(() => {
+    const onExpoData = (data: any) => {
+      const output: string = data.toString();
+      const outputHasIdentifier = output.includes(START_IDENTIFIER);
+      const outputHasEndIdentifier = output.includes(END_IDENTIFIER);
+
+      if (
+        program.showLogs &&
+        !outputHasIdentifier &&
+        output.length < 1000 &&
+        output &&
+        output.trim()
+      ) {
+        console.log(output.trim());
+      }
+
+      if (!firstLog) {
+        firstLog = true;
+        if (!program.keepOpen) {
+          console.log('Waiting for react-navigation-generated logs...');
+        }
+      }
+
+      if (outputHasIdentifier) {
+        routeMapString += output.match(
+          /REACT_NAVIGATION_GENERATED_OUTPUT:(.*)/,
+        )![1];
+      }
+
+      if (outputHasEndIdentifier && (!finished || program.keepOpen)) {
+        finished = true;
         if (!program.keepOpen) {
           expoProcess.kill();
-          console.log(
-            '\nLogs timeout exceeded. No react-navigation-generated app logs found.',
-          );
         }
-      }, (program.timeout ?? DEFAULT_APP_LOGS_TIMEOUT_SECONDS) * 1000);
+        clearTimeout(waitTimeout);
 
-      let routeMapString = '';
+        try {
+          const parsedMap = JSON.parse(routeMapString);
+          if (routeMapString === prevRouteMap) return;
+          prevRouteMap = routeMapString;
 
-      expoProcess.stdout?.on('data', (data: any) => {
-        const output: string = data.toString();
-        const outputHasIdentifier = output.includes(START_IDENTIFIER);
-        const outputHasEndIdentifier = output.includes(END_IDENTIFIER);
-
-        if (
-          program.showLogs &&
-          !outputHasIdentifier &&
-          output.length < 1000 &&
-          output &&
-          output.trim()
-        ) {
-          console.log(output.trim());
+          const outputPath = process.cwd() + outputpath;
+          const tsString = `const routeMap = ${routeMapString} as const;export default routeMap;`;
+          fs.writeFileSync(outputPath, tsString);
+          writeRouteParamTypes(process.cwd() + navigationroot, parsedMap);
+          console.log('\nRoute map created at ' + outputpath);
+        } catch (e) {
+          console.log('PARSE ERROR');
         }
 
-        if (!firstLog) {
-          firstLog = true;
-          if (!program.keepOpen) {
-            console.log('Waiting for react-navigation-generated logs...');
-          }
-        }
+        routeMapString = '';
+      }
+    };
 
-        if (outputHasIdentifier) {
-          routeMapString += output.match(
-            /REACT_NAVIGATION_GENERATED_OUTPUT:(.*)/,
-          )![1];
-        }
+    let expoProcess = exec('expo start -i');
 
-        if (outputHasEndIdentifier && (!finished || program.keepOpen)) {
-          finished = true;
-          if (!program.keepOpen) {
-            expoProcess.kill();
-          }
-          clearTimeout(waitTimeout);
-
-          try {
-            const parsedMap = JSON.parse(routeMapString);
-            if (routeMapString === prevRouteMap) return;
-            prevRouteMap = routeMapString;
-
-            const outputPath = process.cwd() + outputpath;
-            const tsString = `const routeMap = ${routeMapString} as const;export default routeMap;`;
-            fs.writeFileSync(outputPath, tsString);
-            writeRouteParamTypes(process.cwd() + navigationroot, parsedMap);
-            console.log('\nRoute map created at ' + outputpath);
-          } catch (e) {
-            console.log('PARSE ERROR');
-          }
-
-          routeMapString = '';
-        }
+    const initExpoProcess = () => {
+      expoProcess.stdout?.on('data', onExpoData);
+      expoProcess.on('exit', () => {
+        console.log('Restarting expo...');
+        expoProcess = exec('expo start -i');
+        initExpoProcess();
       });
+    };
+
+    if (expoProcess) {
+      initExpoProcess();
     }
   } else {
     console.log('Invalid configuration file');
