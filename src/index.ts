@@ -271,7 +271,7 @@ try {
     process.cwd() + '/rn-gen-config.yml',
     'utf8',
   );
-  const { navigationroot, outputpath } = jsyaml.safeLoad(configContent);
+  const { navigationroot, outputpath } = jsyaml.safeLoad(configContent) as any;
 
   if (navigationroot && outputpath) {
     // MARK requires that an ios simulator is running
@@ -323,17 +323,15 @@ try {
           }
           clearTimeout(waitTimeout);
 
-          if (routeMapString === prevRouteMap) return;
-          prevRouteMap = routeMapString;
-
           try {
+            const parsedMap = JSON.parse(routeMapString);
+            if (routeMapString === prevRouteMap) return;
+            prevRouteMap = routeMapString;
+
             const outputPath = process.cwd() + outputpath;
             const tsString = `const routeMap = ${routeMapString} as const;export default routeMap;`;
             fs.writeFileSync(outputPath, tsString);
-            writeRouteParamTypes(
-              process.cwd() + navigationroot,
-              JSON.parse(routeMapString),
-            );
+            writeRouteParamTypes(process.cwd() + navigationroot, parsedMap);
             console.log('\nRoute map created at ' + outputpath);
           } catch (e) {
             console.log('PARSE ERROR');

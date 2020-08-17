@@ -11,6 +11,7 @@
     "resolveJsonModule": true,
     "downlevelIteration": true,
     "allowJs": true,
+    "skipLibCheck": true,
     "checkJs": true // Type checking
   },
   "include": ["src"],
