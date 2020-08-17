@@ -8,7 +8,8 @@ import jsyaml from 'js-yaml';
 import matchAll from 'match-all';
 
 const START_IDENTIFIER = 'REACT_NAVIGATION_GENERATED_OUTPUT:';
-const START_IDENTIFIER_2 = 'REACT_NAVIGATION_GENERATED_OUTPUT_2:';
+const END_IDENTIFIER = 'END_REACT_NAVIGATION_GENERATED';
+
 const START_ROUTE_TYPES_IDENTIFIER =
   '// START react-navigation-generated types\n';
 const END_ROUTE_TYPES_IDENTIFIER = '// END react-navigation-generated types\n';
@@ -291,20 +292,16 @@ try {
         }
       }, (program.timeout ?? DEFAULT_APP_LOGS_TIMEOUT_SECONDS) * 1000);
 
-      let iden1String: string | null;
+      let routeMapString = '';
 
       expoProcess.stdout?.on('data', (data: any) => {
         const output: string = data.toString();
         const outputHasIdentifier = output.includes(START_IDENTIFIER);
-        const outputHasIdentifier2 = output.includes(START_IDENTIFIER_2);
+        const outputHasEndIdentifier = output.includes(END_IDENTIFIER);
 
         if (program.showLogs && !outputHasIdentifier && output.length < 1000) {
           console.log(output.trim());
         }
-
-        // if (outputHasIdentifier || outputHasIdentifier2) {
-        //   console.log(output);
-        // }
 
         if (!firstLog) {
           firstLog = true;
@@ -314,44 +311,35 @@ try {
         }
 
         if (outputHasIdentifier) {
-          iden1String = output.match(
+          routeMapString += output.match(
             /REACT_NAVIGATION_GENERATED_OUTPUT:(.*)/,
           )![1];
         }
 
-        if (
-          outputHasIdentifier2 &&
-          iden1String &&
-          (!finished || program.keepOpen)
-        ) {
+        if (outputHasEndIdentifier && (!finished || program.keepOpen)) {
           finished = true;
           if (!program.keepOpen) {
             expoProcess.kill();
           }
           clearTimeout(waitTimeout);
-          const iden2String = output.match(
-            /REACT_NAVIGATION_GENERATED_OUTPUT_2:(.*)/,
-          )![1];
 
-          const routeMapJsonString = iden1String + iden2String;
-
-          if (routeMapJsonString === prevRouteMap) return;
-          prevRouteMap = routeMapJsonString;
+          if (routeMapString === prevRouteMap) return;
+          prevRouteMap = routeMapString;
 
           try {
             const outputPath = process.cwd() + outputpath;
-            const tsString = `const routeMap = ${routeMapJsonString} as const;export default routeMap;`;
+            const tsString = `const routeMap = ${routeMapString} as const;export default routeMap;`;
             fs.writeFileSync(outputPath, tsString);
             writeRouteParamTypes(
               process.cwd() + navigationroot,
-              JSON.parse(routeMapJsonString),
+              JSON.parse(routeMapString),
             );
             console.log('\nRoute map created at ' + outputpath);
           } catch (e) {
             console.log('PARSE ERROR');
           }
 
-          iden1String = null;
+          routeMapString = '';
         }
       });
     }
