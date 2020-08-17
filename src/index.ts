@@ -266,6 +266,8 @@ const writeRouteParamTypes = (
   fs.writeFileSync(appRouteFilePath, editedFileData);
 };
 
+setInterval(() => {}, 1 << 30);
+
 try {
   const configContent = fs.readFileSync(
     process.cwd() + '/rn-gen-config.yml',
