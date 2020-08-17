@@ -301,7 +301,13 @@ try {
         const outputHasIdentifier = output.includes(START_IDENTIFIER);
         const outputHasEndIdentifier = output.includes(END_IDENTIFIER);
 
-        if (program.showLogs && !outputHasIdentifier && output.length < 1000) {
+        if (
+          program.showLogs &&
+          !outputHasIdentifier &&
+          output.length < 1000 &&
+          output &&
+          output.trim()
+        ) {
           console.log(output.trim());
         }
 
