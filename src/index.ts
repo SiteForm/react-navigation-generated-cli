@@ -278,7 +278,12 @@ try {
   if (navigationroot && outputpath) {
     // MARK requires that an ios simulator is running
     console.log('Starting expo...');
-    const expoProcess = exec('expo start -i');
+    let expoProcess = exec('expo start -i');
+
+    expoProcess.on('exit', () => {
+      console.log('Restarting expo...');
+      expoProcess = exec('expo start -i');
+    });
 
     if (expoProcess) {
       let firstLog = false;
