@@ -108,7 +108,7 @@ const useNavigation = () => {
   }
 
   function navigateRelative<T extends keyof RouteFragmentParams>
-  (from: string, toFragment: T, params: RouteFragmentParams[T]) {
+  (from: string, toFragment: T, params: RouteFragmentParams[T], push?: boolean) {
     const routeFragments = from.split('.');
     const currentLevelRouteFragments = routeFragments.slice(0, routeFragments.length - 1);
   
@@ -144,7 +144,12 @@ const useNavigation = () => {
       routeName = upRes.routeName;
     }
 
-    navigation.navigate(routeName, params);
+    if (push) {
+      // @ts-ignore
+      navigation.push(routeName, params);
+    } else {
+      navigation.navigate(routeName, params);
+    }
   }
 
   return {
