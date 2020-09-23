@@ -108,16 +108,21 @@ const useNavigation = () => {
   }
 
   function navigateRelative<T extends keyof RouteFragmentParams>
-  (from: string | any, toFragment: T, params: RouteFragmentParams[T], push?: boolean) {
-    
+  ({
+    from,
+    toFragment,
+    params,
+    push,
+    key
+  }: {
+    from: string, 
+    toFragment: T, 
+    params: RouteFragmentParams[T], 
+    push?: boolean,
+    key?: string
+  }) {
     let routeFragments;
-    if (typeof from === 'string') {
-      routeFragments = from.split('.')
-    } else if (!!from.routeName) {
-      routeFragments = from.routeName.split('.')
-    } else {
-      throw Error('Invalid navigateRelative from');
-    }
+    routeFragments = from.split('.')
 
     const currentLevelRouteFragments = routeFragments.slice(0, routeFragments.length - 1);
   
@@ -155,13 +160,9 @@ const useNavigation = () => {
 
     if (push) {
       // @ts-ignore
-      navigation.push({ routeName }, params);
+      navigation.push(routeName, params);
     } else {
-      if (typeof from === 'string') {
-        navigation.navigate(routeName, params);
-      } else if (!!from.key) {
-        navigation.navigate({ name: routeName, key: from.key, params });
-      }
+      navigation.navigate({ name: routeName, key, params });
     }
   }
 
