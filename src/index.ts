@@ -26,7 +26,7 @@ type ExtraScreenParams<T extends keyof NavigationParams> = {
 } & NavigationParams[T]
 
 const useNavigation = () => {
-  const navigation = _useNavigation();
+  const navigation = _useNavigation<StackNavigationProp<any>>();
 
   const navigateTo: <T extends keyof NavigationParams>(
     route: { routeName: T },
