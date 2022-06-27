@@ -120,3 +120,4 @@ navigation.navigateTo(routes.LoginStack.SignUp, { username: 'bill' });
 - Combine type params across navigators.
 - Route name check initial route name prop.
 - Make easier to use.
+- test
