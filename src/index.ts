@@ -365,13 +365,13 @@ try {
       }
     };
 
-    let expoProcess = exec('expo start -i');
+    let expoProcess = exec('expo start -g -i');
 
     const initExpoProcess = () => {
       expoProcess.stdout?.on('data', onExpoData);
       expoProcess.on('exit', () => {
         console.log('Restarting expo...');
-        expoProcess = exec('expo start -i');
+        expoProcess = exec('expo start -g -i');
         initExpoProcess();
       });
     };
